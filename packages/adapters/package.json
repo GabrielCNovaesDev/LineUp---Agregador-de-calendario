@@ -7,10 +7,11 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc --build tsconfig.json",
-    "test": "npm run build && node dist/openf1/index.test.js"
+    "test": "npm run build && node dist/openf1/index.test.js && node dist/thesportsdb/index.test.js"
   },
   "dependencies": {
     "@sports-calendar/shared": "1.0.0",
-    "dayjs": "^1.11.20"
+    "dayjs": "^1.11.20",
+    "p-throttle": "^8.1.0"
   }
 }
