@@ -1,4 +1,4 @@
--- migration: 010_create_alerts
+-- migration: 012_create_alerts
 -- Persistent alerts emitted by the system when it detects suspicious states
 -- the cron alone can't fix (e.g. 3 consecutive successful syncs that produced
 -- zero events — likely a silent adapter regression). One row per detection;

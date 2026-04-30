@@ -1,0 +1,714 @@
+openapi: 3.0.3
+info:
+  title: LineUp Sports Calendar API
+  description: |
+    REST API que serve eventos esportivos agregados a partir de fontes externas
+    (OpenF1, TheSportsDB, etc). MVP foca em motorsport: F1, WEC e MotoGP.
+
+    Todos os horários são retornados em UTC (formato ISO 8601). Para obter o
+    horário local do usuário, passe o parâmetro `tz` (alias: `timezone`) com
+    um nome IANA válido (ex.: `America/Sao_Paulo`); a API adiciona o campo
+    `localTime` à resposta.
+
+    Endpoints `/api/admin/*` exigem o header `Authorization: Bearer {ADMIN_SECRET}`.
+  version: '1.0.0'
+  contact:
+    name: LineUp
+    url: https://github.com/GabrielCNovaesDev
+
+servers:
+  - url: http://localhost:3000
+    description: Desenvolvimento local
+  - url: https://api.lineup.example.com
+    description: Produção (placeholder — definir na Sprint 4)
+
+tags:
+  - name: Health
+    description: Liveness/readiness do serviço
+  - name: Events
+    description: Listagem e detalhe dos eventos esportivos
+  - name: Sports
+    description: Esportes ativos suportados pelo MVP
+  - name: Admin
+    description: Operações administrativas (requer ADMIN_SECRET)
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: |
+        Retorna o estado do banco e do Redis. O HTTP status reflete a
+        disponibilidade do serviço para o load balancer.
+
+        - `200 ok`: tudo conectado.
+        - `200 degraded`: Redis fora há mais que `REDIS_HEALTH_GRACE_PERIOD_SECONDS`
+          (default 120s) — provável outage global; manter instância em rotação.
+        - `503 degraded`: DB fora **ou** Redis fora dentro da janela de graça.
+      responses:
+        '200':
+          description: Serviço saudável (possivelmente degradado mas servindo)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+              examples:
+                ok:
+                  value:
+                    status: ok
+                    db: connected
+                    redis: connected
+                    redisFailureSeconds: 0
+                    version: '1.0.0'
+                degradedRedis:
+                  value:
+                    status: degraded
+                    db: connected
+                    redis: error
+                    redisFailureSeconds: 240
+                    version: '1.0.0'
+        '503':
+          description: Serviço indisponível (DB fora ou falha recente de Redis)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+              example:
+                status: degraded
+                db: error
+                redis: connected
+                redisFailureSeconds: 0
+                version: '1.0.0'
+
+  /api/events:
+    get:
+      tags: [Events]
+      summary: Listar eventos com filtros e paginação
+      description: |
+        Retorna eventos paginados, ordenados por `startsAt` ASC. Por padrão a
+        query oculta eventos cujo `startsAt` é mais antigo que `NOW() - 1 dia`,
+        para focar a visão de calendário em eventos atuais e futuros — passe
+        `from` explícito para acessar histórico.
+
+        **Cache:** TTL de 30min (1800s) para `status` ≠ `live` e 60s para `live`.
+        Invalidado automaticamente após sync bem-sucedido do esporte.
+      parameters:
+        - in: query
+          name: sports
+          description: Lista de slugs separados por vírgula
+          required: false
+          schema:
+            type: string
+            example: 'f1,wec,motogp'
+        - in: query
+          name: from
+          description: Data inicial (ISO 8601, UTC)
+          required: false
+          schema:
+            type: string
+            format: date-time
+            example: '2025-01-01T00:00:00Z'
+        - in: query
+          name: to
+          description: Data final (ISO 8601, UTC). Deve ser ≥ `from`.
+          required: false
+          schema:
+            type: string
+            format: date-time
+            example: '2025-12-31T23:59:59Z'
+        - in: query
+          name: status
+          required: false
+          schema:
+            $ref: '#/components/schemas/EventStatus'
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            example: 1
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+            example: 50
+        - in: query
+          name: tz
+          description: |
+            Timezone IANA (ex.: `America/Sao_Paulo`). Quando presente, cada
+            evento ganha o campo `localTime`. Timezone inválido retorna 400.
+            O alias `timezone` também é aceito (`tz` tem prioridade).
+          required: false
+          schema:
+            type: string
+            example: 'America/Sao_Paulo'
+        - in: query
+          name: timezone
+          description: Alias de `tz` (use um ou outro)
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista paginada de eventos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEvents'
+              example:
+                data:
+                  - id: 'b9f8a4d6-1e2f-4c3a-b7d9-0d4f3e2a1c5b'
+                    sport:
+                      slug: f1
+                      name: 'Fórmula 1'
+                      category: motorsport
+                    title: 'Grande Prêmio da Austrália'
+                    subtitle: 'Corrida'
+                    venue: 'Albert Park Circuit'
+                    country: 'Austrália'
+                    roundNumber: 3
+                    startsAt: '2026-03-15T05:00:00.000Z'
+                    endsAt: '2026-03-15T07:00:00.000Z'
+                    durationMinutes: 120
+                    status: scheduled
+                    localTime: '2026-03-15T02:00:00-03:00'
+                pagination:
+                  page: 1
+                  limit: 50
+                  total: 24
+                  hasNextPage: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /api/events/{id}:
+    get:
+      tags: [Events]
+      summary: Detalhe de um evento por ID
+      description: |
+        Retorna um evento pelo `id` (UUID). Cache de 15 minutos.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 'b9f8a4d6-1e2f-4c3a-b7d9-0d4f3e2a1c5b'
+        - in: query
+          name: tz
+          required: false
+          schema:
+            type: string
+            example: 'America/Sao_Paulo'
+        - in: query
+          name: timezone
+          description: Alias de `tz`
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Evento encontrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /api/events/freshness:
+    get:
+      tags: [Events]
+      summary: Frescor dos dados por esporte
+      description: |
+        Retorna, por esporte, a data do último sync bem-sucedido e se os dados
+        estão estagnados (`stale = true` quando
+        `now - lastSuccessfulSync > 2 × expectedIntervalMinutes`). Frontend usa
+        para decidir se exibe o banner "dados podem estar desatualizados".
+
+        Endpoint público (sem auth). Cache de 30s.
+      responses:
+        '200':
+          description: Frescor por esporte
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FreshnessResponse' }
+              example:
+                sports:
+                  - slug: f1
+                    lastSuccessfulSync: '2026-04-30T12:00:00.000Z'
+                    stale: false
+                    expectedIntervalMinutes: 360
+                  - slug: wec
+                    lastSuccessfulSync: null
+                    stale: true
+                    expectedIntervalMinutes: 720
+                generatedAt: '2026-04-30T12:30:00.000Z'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /api/sports:
+    get:
+      tags: [Sports]
+      summary: Listar esportes ativos
+      description: |
+        Retorna os esportes com `is_active = true` ordenados por `category, name`.
+        Cache de 24h. Esportes inativos (ex.: UFC, Tênis preparados para v1.1)
+        não aparecem aqui.
+      responses:
+        '200':
+          description: Lista de esportes ativos
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Sport' }
+              example:
+                data:
+                  - slug: f1
+                    name: 'Fórmula 1'
+                    category: motorsport
+                  - slug: motogp
+                    name: 'MotoGP'
+                    category: motorsport
+                  - slug: wec
+                    name: 'WEC'
+                    category: motorsport
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /api/admin/sync/{sportSlug}:
+    post:
+      tags: [Admin]
+      summary: Disparar sync manual de um esporte
+      description: |
+        Inicia uma execução do job de sync correspondente ao `sportSlug` em
+        background. A resposta `202` retorna imediatamente com o `syncLogId`
+        — o resultado fica gravado em `sync_log` e pode ser consultado em
+        `GET /api/admin/sync-log`.
+      security:
+        - adminSecret: []
+      parameters:
+        - in: path
+          name: sportSlug
+          required: true
+          description: Slug do esporte (`f1`, `wec`, `motogp`)
+          schema:
+            type: string
+            example: f1
+      responses:
+        '202':
+          description: Sync iniciado em background
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, syncLogId]
+                properties:
+                  message:
+                    type: string
+                    example: 'Sync iniciado'
+                  syncLogId:
+                    type: string
+                    format: uuid
+                    example: 'd8e7c6b5-4321-4abc-9def-0123456789ab'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Sport não encontrado (sem job registrado)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error: 'Sport nao encontrado: ufc'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /api/admin/sync-log:
+    get:
+      tags: [Admin]
+      summary: Listar execuções recentes do scheduler
+      description: |
+        Retorna os registros de `sync_log` ordenados por `started_at` DESC.
+      security:
+        - adminSecret: []
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          description: Quantidade máxima de registros (1–100, default 50)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+            example: 50
+      responses:
+        '200':
+          description: Lista de execuções
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/SyncLog' }
+        '400':
+          description: limit fora do intervalo aceito
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error: 'limit must be a positive integer between 1 and 100'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /api/admin/alerts:
+    get:
+      tags: [Admin]
+      summary: Listar alertas
+      description: |
+        Por padrão retorna apenas alertas ativos (sem `resolvedAt`). Passe
+        `includeResolved=true` para incluir os já resolvidos (limite 100).
+      security:
+        - adminSecret: []
+      parameters:
+        - in: query
+          name: includeResolved
+          required: false
+          schema:
+            type: boolean
+            default: false
+            example: false
+      responses:
+        '200':
+          description: Lista de alertas
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Alert' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+components:
+  securitySchemes:
+    adminSecret:
+      type: http
+      scheme: bearer
+      description: |
+        Token compartilhado configurado em `ADMIN_SECRET` no `.env` da API.
+        Header: `Authorization: Bearer {ADMIN_SECRET}`.
+
+  schemas:
+    Sport:
+      type: object
+      required: [slug, name, category]
+      properties:
+        slug:
+          type: string
+          example: f1
+        name:
+          type: string
+          example: 'Fórmula 1'
+        category:
+          type: string
+          enum: [motorsport, mma, tennis]
+          example: motorsport
+
+    EventStatus:
+      type: string
+      enum: [scheduled, live, completed, cancelled, postponed]
+      example: scheduled
+
+    Event:
+      type: object
+      required: [id, sport, title, startsAt, status, subtitle, venue, country, roundNumber, endsAt, durationMinutes]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 'b9f8a4d6-1e2f-4c3a-b7d9-0d4f3e2a1c5b'
+        sport:
+          $ref: '#/components/schemas/Sport'
+        title:
+          type: string
+          example: 'Grande Prêmio da Austrália'
+        subtitle:
+          type: string
+          nullable: true
+          example: 'Corrida'
+        venue:
+          type: string
+          nullable: true
+          example: 'Albert Park Circuit'
+        country:
+          type: string
+          nullable: true
+          example: 'Austrália'
+        roundNumber:
+          type: integer
+          nullable: true
+          example: 3
+        startsAt:
+          type: string
+          format: date-time
+          description: Sempre em UTC (ISO 8601)
+          example: '2026-03-15T05:00:00.000Z'
+        endsAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-03-15T07:00:00.000Z'
+        durationMinutes:
+          type: integer
+          nullable: true
+          example: 120
+        status:
+          $ref: '#/components/schemas/EventStatus'
+        localTime:
+          type: string
+          format: date-time
+          description: |
+            Presente apenas quando `tz` (ou `timezone`) é passado na query.
+            Horário do evento no fuso do usuário, com offset ISO 8601.
+          example: '2026-03-15T02:00:00-03:00'
+
+    Pagination:
+      type: object
+      required: [page, limit, total, hasNextPage]
+      properties:
+        page: { type: integer, example: 1 }
+        limit: { type: integer, example: 50 }
+        total: { type: integer, example: 24 }
+        hasNextPage: { type: boolean, example: false }
+
+    PaginatedEvents:
+      type: object
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Event' }
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    SportFreshness:
+      type: object
+      required: [slug, lastSuccessfulSync, stale, expectedIntervalMinutes]
+      properties:
+        slug:
+          type: string
+          example: f1
+        lastSuccessfulSync:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-04-30T12:00:00.000Z'
+        stale:
+          type: boolean
+          example: false
+        expectedIntervalMinutes:
+          type: integer
+          example: 360
+
+    FreshnessResponse:
+      type: object
+      required: [sports, generatedAt]
+      properties:
+        sports:
+          type: array
+          items: { $ref: '#/components/schemas/SportFreshness' }
+        generatedAt:
+          type: string
+          format: date-time
+          example: '2026-04-30T12:30:00.000Z'
+
+    SyncLogStatus:
+      type: string
+      enum: [running, success, failed]
+      example: success
+
+    SyncLog:
+      type: object
+      required: [id, source, sport_slug, started_at, status, events_upserted, events_skipped]
+      description: |
+        Snake_case porque o endpoint expõe diretamente as linhas da tabela
+        `sync_log`. Pode ser camelCase em uma versão futura.
+      properties:
+        id:
+          type: string
+          format: uuid
+        source:
+          type: string
+          example: openf1
+        sport_slug:
+          type: string
+          example: f1
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        events_upserted:
+          type: integer
+          example: 24
+        events_skipped:
+          type: integer
+          example: 0
+        error:
+          type: string
+          nullable: true
+          example: null
+        status:
+          $ref: '#/components/schemas/SyncLogStatus'
+
+    Alert:
+      type: object
+      required: [id, sportSlug, kind, message, detectedAt, resolvedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        sportSlug:
+          type: string
+          example: f1
+        kind:
+          type: string
+          enum: [silent_failure]
+          example: silent_failure
+        message:
+          type: string
+          example: '3 consecutive successful syncs for f1 produced zero events. Likely an adapter regression — investigate the upstream API response shape.'
+        detectedAt:
+          type: string
+          format: date-time
+          example: '2026-04-30T18:00:00.000Z'
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+
+    HealthResponse:
+      type: object
+      required: [status, db, redis, redisFailureSeconds, version]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+          example: ok
+        db:
+          type: string
+          enum: [connected, error]
+          example: connected
+        redis:
+          type: string
+          enum: [connected, error]
+          example: connected
+        redisFailureSeconds:
+          type: integer
+          description: Duração da falha atual de Redis em segundos (0 se conectado)
+          example: 0
+        version:
+          type: string
+          example: '1.0.0'
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: 'Evento nao encontrado'
+        details:
+          type: array
+          items:
+            type: string
+          description: Lista opcional de erros de validação
+
+  responses:
+    BadRequest:
+      description: Parâmetros inválidos
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: 'Invalid query parameters'
+            details:
+              - 'limit must be less than or equal to 100'
+              - 'timezone "Mars/Olympus_Mons" is not a valid IANA timezone'
+
+    Unauthorized:
+      description: Header Authorization ausente ou inválido
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: 'Nao autorizado'
+
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: 'Evento nao encontrado'
+
+    InternalError:
+      description: Erro interno não identificado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: 'Internal server error'
+
+    ServiceUnavailable:
+      description: |
+        Dependência indisponível (PostgreSQL fora). Retornado pelo
+        middleware de erro quando detecta falha de conexão (`ECONNREFUSED`,
+        `08001`, `08006`, `57P03`).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: 'Service temporarily unavailable'
