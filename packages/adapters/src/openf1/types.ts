@@ -3,7 +3,7 @@ export interface OpenF1Session {
   session_name: string;
   session_type?: string;
   meeting_key: number;
-  meeting_name: string;
+  meeting_name?: string;
   circuit_short_name?: string;
   country_name?: string;
   date_start: string;

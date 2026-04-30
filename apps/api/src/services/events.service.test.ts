@@ -159,7 +159,7 @@ async function testListEventsBuildsQueryWithFilters() {
     category: 'motorsport'
   });
   assert.equal(result.events[0]?.startsAt, '2025-03-16T05:00:00.000Z');
-  assert.ok(result.events[0]?.localTime?.startsWith('2025-03-16T02:00:00'));
+  assert.equal(result.events[0]?.localTime, '2025-03-16T02:00:00-03:00');
 
   const listQuery = db.queries.find((q) => q.sql.includes('FROM events e\n        JOIN sports'));
   assert.ok(listQuery, 'expected list query');

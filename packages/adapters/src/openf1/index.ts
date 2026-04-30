@@ -125,11 +125,16 @@ export class OpenF1Adapter implements SportAdapter {
       ? this.parseDate(session.date_end, session.session_key, 'date_end')
       : undefined;
 
+    // OpenF1's /sessions endpoint stopped returning meeting_name for some
+    // seasons (notably 2026 pre-season). The /meetings endpoint always carries
+    // it, so prefer that and fall back to the session field for older seasons.
+    const title = meeting?.meeting_name ?? session.meeting_name;
+
     return {
       externalId: `openf1:${session.session_key}`,
       source: this.sourceId,
       sportSlug: this.sportSlug,
-      title: session.meeting_name,
+      title: title ?? '',
       subtitle: this.mapSessionName(session.session_name),
       venue: meeting?.circuit_short_name ?? session.circuit_short_name,
       country: meeting?.country_name ?? session.country_name,

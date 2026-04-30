@@ -197,7 +197,7 @@ export class EventsService {
     const limit = Math.min(MAX_LIMIT, Math.max(1, Math.floor(filter.limit ?? DEFAULT_LIMIT)));
     const offset = (page - 1) * limit;
 
-    const conditions: string[] = [];
+    const conditions: string[] = ['s.is_active = TRUE'];
     const values: unknown[] = [];
 
     if (filter.sports && filter.sports.length > 0) {
@@ -338,11 +338,23 @@ function formatInTimezone(date: Date, timezone: string): string | undefined {
       return undefined;
     }
 
-    const offset = parts.timeZoneName?.replace(/^GMT/, '') || 'Z';
-    const normalizedOffset = offset === '' ? 'Z' : offset;
+    const stripped = parts.timeZoneName?.replace(/^GMT/, '') ?? '';
+    const normalizedOffset = normalizeOffset(stripped);
 
     return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}${normalizedOffset}`;
   } catch {
     return undefined;
   }
+}
+
+// Intl shortOffset can return "GMT-3" (one-digit hour) or "GMT-03:30"; the
+// README documents ISO 8601 offsets as "±HH:MM", so pad missing digits.
+function normalizeOffset(stripped: string): string {
+  if (stripped === '') return 'Z';
+  const match = stripped.match(/^([+-])(\d{1,2})(?::(\d{2}))?$/);
+  if (!match) return stripped;
+  const sign = match[1] ?? '+';
+  const hours = (match[2] ?? '0').padStart(2, '0');
+  const minutes = (match[3] ?? '00').padStart(2, '0');
+  return `${sign}${hours}:${minutes}`;
 }

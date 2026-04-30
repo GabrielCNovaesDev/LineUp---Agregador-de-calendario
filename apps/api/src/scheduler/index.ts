@@ -1,4 +1,4 @@
-import { OpenF1Adapter, TheSportsDBAdapter } from '@sports-calendar/adapters';
+import { OpenF1Adapter } from '@sports-calendar/adapters';
 import type { SportAdapter } from '@sports-calendar/adapters';
 import cron from 'node-cron';
 import { env } from '../config/env.js';
@@ -21,21 +21,14 @@ export function startScheduler(): SchedulerHandle {
   const eventsService = new EventsService(db);
   const runner = new SyncRunner({ db, eventsService });
 
+  // MVP scope: F1 only. WEC and MotoGP need a paid TheSportsDB key (free tier
+  // doesn't expose those leagues — see validation findings); re-enable here
+  // once the data source is sorted out.
   const jobs: ScheduledJob[] = [
     {
       name: 'openf1-f1',
       schedule: '0 */6 * * *', // every 6 hours
       adapter: new OpenF1Adapter()
-    },
-    {
-      name: 'thesportsdb-wec',
-      schedule: '0 */12 * * *', // every 12 hours
-      adapter: new TheSportsDBAdapter('wec', env.thesportsdbApiKey)
-    },
-    {
-      name: 'thesportsdb-motogp',
-      schedule: '30 */12 * * *', // every 12 hours, offset 30 min from WEC
-      adapter: new TheSportsDBAdapter('motogp', env.thesportsdbApiKey)
     }
   ];
 

@@ -1,7 +1,46 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm test *)"
+      "Bash(npm test *)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Read(//c/Program Files/Docker/Docker/**)",
+      "Read(//c/Program Files/Docker/**)",
+      "Bash(\"/c/Program Files/Docker/Docker/Docker Desktop.exe\")",
+      "Bash(docker exec *)",
+      "Bash(kill %1)",
+      "Bash(node apps/api/dist/index.js)",
+      "Bash(curl -s \"http://localhost:3000/api/events?sports=f1&limit=2&from=2026-01-01\")",
+      "Bash(curl -s \"http://localhost:3000/api/events?sports=wec&limit=2&from=2026-01-01\")",
+      "Bash(curl -s \"http://localhost:3000/api/events?sports=motogp&limit=2&from=2026-01-01\")",
+      "Bash(curl -s \"https://api.openf1.org/v1/sessions?year=2026\")",
+      "Bash(curl -s \"https://api.openf1.org/v1/meetings?year=2026\")",
+      "Bash(curl -s \"https://www.thesportsdb.com/api/v1/json/3/lookupleague.php?id=4497\")",
+      "Bash(curl -s \"https://www.thesportsdb.com/api/v1/json/3/search_all_leagues.php?s=Motorsport\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(l['idLeague'], '-', l['strLeague']\\) for l in d.get\\('countries',[]\\) or d.get\\('leagues',[]\\)]\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(l['idLeague'], '-', l['strLeague']\\) for l in d.get\\('countries',[]\\) or d.get\\('leagues',[]\\) if 'moto' in l['strLeague'].lower\\(\\) or 'wec' in l['strLeague'].lower\\(\\) or 'endur' in l['strLeague'].lower\\(\\) or 'f1' in l['strLeague'].lower\\(\\) or 'formula' in l['strLeague'].lower\\(\\)]\")",
+      "Bash(python -c ' *)",
+      "Bash(curl -s \"https://www.thesportsdb.com/api/v1/json/3/search_all_leagues.php?s=Motorsport\" -o motorsport.json)",
+      "Bash(jobs)",
+      "Bash(curl -sf http://localhost:3000/health)",
+      "Bash(break)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Start-Sleep -Seconds 1; \\(Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue\\).Count)",
+      "Bash(curl -s \"http://localhost:3000/api/events?sports=f1&limit=3&from=2026-01-01\")",
+      "Bash(curl -s \"http://localhost:3000/api/events?sports=f1&from=2026-01-01\")",
+      "Bash(python -c \"import json,sys;d=json.load\\(sys.stdin\\);print\\('total:',d['total'],'returned:',len\\(d['events']\\)\\)\")",
+      "Bash(curl -s \"http://localhost:3000/api/events?sports=f1,wec&from=2026-01-01&limit=1\")",
+      "Bash(python -c \"import json,sys;d=json.load\\(sys.stdin\\);print\\('total:',d['total']\\);print\\('first:',json.dumps\\(d['events'][0],indent=2\\)\\)\")",
+      "Bash(curl -s \"http://localhost:3000/api/events?sports=f1&status=scheduled&from=2026-01-01\")",
+      "Bash(python -c \"import json,sys;d=json.load\\(sys.stdin\\);print\\('scheduled:',d['total']\\)\")",
+      "Bash(curl -s \"http://localhost:3000/api/events?sports=f1&status=completed&from=2026-01-01\")",
+      "Bash(python -c \"import json,sys;d=json.load\\(sys.stdin\\);print\\('completed:',d['total']\\)\")",
+      "Bash(curl -s \"http://localhost:3000/api/events?sports=f1&from=2026-01-01&page=2&limit=5\")",
+      "Bash(python -c \"import json,sys;d=json.load\\(sys.stdin\\);print\\('page:',d['page'],'limit:',d['limit'],'returned:',len\\(d['events']\\)\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://localhost:3000/api/events?status=foo\")",
+      "Bash(curl -s \"http://localhost:3000/api/events?sports=f1&from=2026-01-01&limit=1&timezone=America/Sao_Paulo\")",
+      "Bash(python -c \"import json,sys;d=json.load\\(sys.stdin\\);print\\(json.dumps\\(d['events'][0],indent=2\\)\\)\")",
+      "Bash(curl -s \"http://localhost:3000/api/events?sports=f1&from=2026-01-01&limit=1\")",
+      "PowerShell(Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; \"stopped\")"
     ]
   }
 }
