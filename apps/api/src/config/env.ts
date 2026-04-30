@@ -7,5 +7,6 @@ export const env = {
   adminSecret: process.env.ADMIN_SECRET,
   thesportsdbApiKey: process.env.THESPORTSDB_API_KEY ?? '3',
   schedulerEnabled: (process.env.SCHEDULER_ENABLED ?? 'true').toLowerCase() !== 'false',
-  schedulerRunOnStart: (process.env.SCHEDULER_RUN_ON_START ?? 'true').toLowerCase() !== 'false'
+  schedulerRunOnStart: (process.env.SCHEDULER_RUN_ON_START ?? 'true').toLowerCase() !== 'false',
+  redisHealthGracePeriodSeconds: Number(process.env.REDIS_HEALTH_GRACE_PERIOD_SECONDS ?? 120)
 };

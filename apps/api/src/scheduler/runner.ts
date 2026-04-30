@@ -1,5 +1,7 @@
 import type { Redis } from 'ioredis';
 import type { SportAdapter } from '@sports-calendar/adapters';
+import { CacheService } from '../lib/cache.js';
+import { AlertsService } from '../services/alerts.service.js';
 import { EventsService, type Queryable, type UpsertResult } from '../services/events.service.js';
 
 export interface SyncRunnerLogger {
@@ -12,12 +14,15 @@ export interface SyncJob {
   name: string;
   sportSlug: string;
   schedule: string;
+  intervalMinutes: number;
   adapter: SportAdapter;
 }
 
 export interface SyncRunnerOptions {
   db: Queryable;
   eventsService: EventsService;
+  cache?: CacheService;
+  alerts?: AlertsService;
   logger?: SyncRunnerLogger;
   now?: () => Date;
 }
@@ -45,7 +50,12 @@ const defaultLogger: SyncRunnerLogger = {
 };
 
 export async function runJob(job: SyncJob, db: Queryable, _redis?: Redis): Promise<SyncJobResult> {
-  const runner = new SyncRunner({ db, eventsService: new EventsService(db) });
+  const runner = new SyncRunner({
+    db,
+    eventsService: new EventsService(db),
+    cache: _redis ? new CacheService(_redis) : undefined,
+    alerts: new AlertsService(db)
+  });
   return runner.runJob(job);
 }
 
@@ -55,19 +65,29 @@ export async function startJob(
   _redis?: Redis,
   logger: SyncRunnerLogger = defaultLogger
 ): Promise<StartedSyncJob> {
-  const runner = new SyncRunner({ db, eventsService: new EventsService(db), logger });
+  const runner = new SyncRunner({
+    db,
+    eventsService: new EventsService(db),
+    cache: _redis ? new CacheService(_redis) : undefined,
+    alerts: new AlertsService(db),
+    logger
+  });
   return runner.startJob(job);
 }
 
 export class SyncRunner {
   private readonly db: Queryable;
   private readonly eventsService: EventsService;
+  private readonly cache?: CacheService;
+  private readonly alerts?: AlertsService;
   private readonly logger: SyncRunnerLogger;
   private readonly now: () => Date;
 
   constructor(options: SyncRunnerOptions) {
     this.db = options.db;
     this.eventsService = options.eventsService;
+    this.cache = options.cache;
+    this.alerts = options.alerts;
     this.logger = options.logger ?? defaultLogger;
     this.now = options.now ?? (() => new Date());
   }
@@ -77,6 +97,7 @@ export class SyncRunner {
       name: `${adapter.sourceId}-${adapter.sportSlug}`,
       sportSlug: adapter.sportSlug,
       schedule: '',
+      intervalMinutes: 0,
       adapter
     }, season);
   }
@@ -153,6 +174,22 @@ export class SyncRunner {
       skipped: upsertResult.skipped,
       error: errorSummary
     });
+
+    await this.cache?.invalidate(`events:list:*${job.sportSlug}*`);
+
+    if (this.alerts) {
+      try {
+        await this.alerts.reconcileAfterSync(job.sportSlug, {
+          upserted: upsertResult.upserted,
+          skipped: upsertResult.skipped
+        });
+      } catch (error) {
+        this.logger.error('alert reconciliation failed', {
+          job: job.name,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
 
     this.logger.info('sync completed', {
       job: job.name,

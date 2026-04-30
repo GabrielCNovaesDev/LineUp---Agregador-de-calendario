@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc --project tsconfig.json",
-    "test": "npm run build && node dist/services/events.service.test.js && node dist/routes/events.parser.test.js && node dist/scheduler/sync-runner.test.js"
+    "test": "npm run build && node dist/services/events.service.test.js && node dist/services/freshness.service.test.js && node dist/services/alerts.service.test.js && node dist/middleware/error.test.js && node dist/routes/events.parser.test.js && node dist/routes/health.test.js && node dist/scheduler/sync-runner.test.js"
   },
   "dependencies": {
     "@sports-calendar/adapters": "1.0.0",

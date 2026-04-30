@@ -1,8 +1,13 @@
 import { Router } from 'express';
 import { env } from '../config/env.js';
+import { db } from '../lib/db.js';
+import { respondWithError } from '../middleware/error.js';
 import { findJobBySportSlug, triggerJob } from '../scheduler/index.js';
+import { AlertsService } from '../services/alerts.service.js';
 
 export const adminRouter = Router();
+
+const alertsService = new AlertsService(db);
 
 adminRouter.post('/admin/sync/:sportSlug', async (req, res) => {
   if (!isAuthorized(req.get('authorization'))) {
@@ -29,9 +34,27 @@ adminRouter.post('/admin/sync/:sportSlug', async (req, res) => {
       syncLogId: started.syncLogId
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Internal server error';
     console.error(`POST /api/admin/sync/${sportSlug} failed:`, error);
-    res.status(500).json({ error: message });
+    respondWithError(res, error);
+  }
+});
+
+adminRouter.get('/admin/alerts', async (req, res) => {
+  if (!isAuthorized(req.get('authorization'))) {
+    res.status(401).json({ error: 'Nao autorizado' });
+    return;
+  }
+
+  const includeResolved = req.query.includeResolved === 'true';
+
+  try {
+    const alerts = includeResolved
+      ? await alertsService.listAll()
+      : await alertsService.listActive();
+    res.json({ data: alerts });
+  } catch (error) {
+    console.error('GET /api/admin/alerts failed:', error);
+    respondWithError(res, error);
   }
 });
 

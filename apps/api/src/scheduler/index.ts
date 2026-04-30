@@ -2,6 +2,8 @@ import cron from 'node-cron';
 import { env } from '../config/env.js';
 import { db } from '../lib/db.js';
 import { redis } from '../lib/redis.js';
+import { CacheService } from '../lib/cache.js';
+import { AlertsService } from '../services/alerts.service.js';
 import { EventsService } from '../services/events.service.js';
 import { f1Job } from './jobs/f1.job.js';
 import { motogpJob } from './jobs/motogp.job.js';
@@ -17,7 +19,12 @@ export const jobs: SyncJob[] = [f1Job, wecJob, motogpJob];
 
 export function startScheduler(): SchedulerHandle {
   const eventsService = new EventsService(db);
-  const runner = new SyncRunner({ db, eventsService });
+  const runner = new SyncRunner({
+    db,
+    eventsService,
+    cache: new CacheService(redis),
+    alerts: new AlertsService(db)
+  });
 
   const tasks = jobs.map((job) => {
     const task = cron.schedule(job.schedule, () => {

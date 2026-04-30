@@ -6,5 +6,6 @@ export const motogpJob: SyncJob = {
   name: 'MotoGP Sync',
   sportSlug: 'motogp',
   schedule: '30 */12 * * *',
+  intervalMinutes: 720,
   adapter: new TheSportsDBAdapter('motogp', env.thesportsdbApiKey)
 };
