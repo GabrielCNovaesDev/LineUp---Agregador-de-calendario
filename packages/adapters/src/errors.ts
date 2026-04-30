@@ -11,3 +11,13 @@ export class AdapterFetchError extends Error {
     this.cause = options.cause;
   }
 }
+
+export class RateLimitError extends Error {
+  readonly sourceId: string;
+
+  constructor(sourceId: string, message = `${sourceId} rate limit exceeded`) {
+    super(message);
+    this.name = 'RateLimitError';
+    this.sourceId = sourceId;
+  }
+}
