@@ -44,6 +44,28 @@ async function request<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`;
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body?.error) message = body.error;
+    } catch {
+      // body was not JSON; keep default message
+    }
+    throw new ApiError(message, res.status);
+  }
+  return (await res.json()) as T;
+}
+
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
     super(message);
@@ -68,6 +90,14 @@ export const api = {
 
   getFreshness(): Promise<FreshnessResponse> {
     return request<FreshnessResponse>('/api/events/freshness');
+  },
+
+  subscribeToNotification(params: {
+    eventId: string;
+    minutesBefore: number;
+    timezone: string;
+  }): Promise<{ id?: string; message?: string }> {
+    return post<{ id?: string; message?: string }>('/api/notifications/subscribe', params);
   },
 
   exportICalUrl(params: { sports?: string[]; from?: string; to?: string }): string {
