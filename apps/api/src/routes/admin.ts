@@ -58,7 +58,46 @@ adminRouter.get('/admin/alerts', async (req, res) => {
   }
 });
 
+adminRouter.get('/admin/sync-log', async (req, res) => {
+  if (!isAuthorized(req.get('authorization'))) {
+    res.status(401).json({ error: 'Nao autorizado' });
+    return;
+  }
+
+  const limit = parseLimit(req.query.limit);
+
+  if (limit === null) {
+    res.status(400).json({ error: 'limit must be a positive integer between 1 and 100' });
+    return;
+  }
+
+  try {
+    const logs = await db.query(
+      `
+        SELECT *
+        FROM sync_log
+        ORDER BY started_at DESC
+        LIMIT $1
+      `,
+      [limit]
+    );
+    res.json({ data: logs.rows });
+  } catch (error) {
+    console.error('GET /api/admin/sync-log failed:', error);
+    respondWithError(res, error);
+  }
+});
+
 function isAuthorized(authorization?: string): boolean {
   if (!env.adminSecret) return false;
   return authorization === `Bearer ${env.adminSecret}`;
+}
+
+function parseLimit(value: unknown): number | null {
+  if (value === undefined) return 50;
+  if (typeof value !== 'string') return null;
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) return null;
+  return parsed;
 }

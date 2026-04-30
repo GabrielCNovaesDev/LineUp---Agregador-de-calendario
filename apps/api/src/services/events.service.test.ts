@@ -197,6 +197,37 @@ async function testListEventsClampsLimit() {
   assert.equal(result.limit, 100);
 }
 
+async function testFindByIdReturnsEvent() {
+  const db = new FakeDb();
+  db.listRows = [
+    {
+      id: 'evt-1',
+      title: 'Australian Grand Prix',
+      subtitle: 'Corrida',
+      venue: 'Albert Park Circuit',
+      country: 'Australia',
+      round_number: 3,
+      starts_at: new Date('2025-03-16T05:00:00Z'),
+      ends_at: new Date('2025-03-16T07:00:00Z'),
+      duration_minutes: 120,
+      status: 'scheduled',
+      sport_slug: 'f1',
+      sport_name: 'FÃ³rmula 1',
+      sport_category: 'motorsport'
+    }
+  ];
+
+  const service = new EventsService(db);
+  const event = await service.findById('evt-1');
+
+  assert.equal(event?.id, 'evt-1');
+  assert.equal(event?.sport.slug, 'f1');
+
+  const query = db.queries.find((q) => q.sql.includes('WHERE e.id = $1'));
+  assert.ok(query);
+  assert.equal(query!.values?.[0], 'evt-1');
+}
+
 const tests = [
   ['validation rejects invalid events', testValidationRejectsInvalidEvents],
   ['upserts valid events', testUpsertsValidEvents],
@@ -204,7 +235,8 @@ const tests = [
   ['collects errors and continues batch', testCollectsErrorsAndContinuesBatch],
   ['listEvents builds query with filters', testListEventsBuildsQueryWithFilters],
   ['listEvents applies default time window', testListEventsAppliesDefaultFromWindow],
-  ['listEvents clamps limit to 100', testListEventsClampsLimit]
+  ['listEvents clamps limit to 100', testListEventsClampsLimit],
+  ['findById returns event', testFindByIdReturnsEvent]
 ] as const;
 
 for (const [name, run] of tests) {

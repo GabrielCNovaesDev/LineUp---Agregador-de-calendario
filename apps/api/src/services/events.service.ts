@@ -271,6 +271,36 @@ export class EventsService {
     };
   }
 
+  async findById(id: string): Promise<EventDto | null> {
+    const result = await this.db.query<EventRow>(
+      `
+        SELECT
+          e.id,
+          e.title,
+          e.subtitle,
+          e.venue,
+          e.country,
+          e.round_number,
+          e.starts_at,
+          e.ends_at,
+          e.duration_minutes,
+          e.status,
+          s.slug     AS sport_slug,
+          s.name     AS sport_name,
+          s.category AS sport_category
+        FROM events e
+        JOIN sports s ON s.id = e.sport_id
+        WHERE e.id = $1
+          AND s.is_active = TRUE
+        LIMIT 1
+      `,
+      [id]
+    );
+
+    const row = result.rows[0];
+    return row ? this.toDto(row) : null;
+  }
+
   private toDto(row: EventRow, timezone?: string): EventDto {
     const startsAt = new Date(row.starts_at);
     const endsAt = row.ends_at ? new Date(row.ends_at) : null;

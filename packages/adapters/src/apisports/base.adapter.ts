@@ -47,7 +47,7 @@ export abstract class APISportsBaseAdapter implements SportAdapter {
     return (await response.json()) as T;
   }
 
-  async fetchEvents(_season: number): Promise<NormalizedEvent[]> {
+  async fetchEvents(): Promise<NormalizedEvent[]> {
     throw new Error(`${this.constructor.name}.fetchEvents() is not implemented yet`);
   }
 }

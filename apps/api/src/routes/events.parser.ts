@@ -9,6 +9,8 @@ const VALID_STATUS: ReadonlySet<EventStatus> = new Set([
   'postponed'
 ]);
 
+const MAX_LIMIT = 100;
+
 export type ParseResult =
   | { ok: true; filter: ListEventsFilter }
   | { ok: false; errors: string[] };
@@ -69,9 +71,15 @@ export function parseListEventsQuery(query: Record<string, unknown>): ParseResul
 
   const limit = readInteger(query.limit, 'limit');
   if (limit.error) errors.push(limit.error);
-  else if (limit.value !== undefined) filter.limit = limit.value;
+  else if (limit.value !== undefined) {
+    if (limit.value > MAX_LIMIT) {
+      errors.push(`limit must be less than or equal to ${MAX_LIMIT}`);
+    } else {
+      filter.limit = limit.value;
+    }
+  }
 
-  const timezone = readString(query.timezone);
+  const timezone = readString(query.tz) ?? readString(query.timezone);
   if (timezone !== undefined) {
     if (!isValidTimezone(timezone)) {
       errors.push(`timezone "${timezone}" is not a valid IANA timezone`);

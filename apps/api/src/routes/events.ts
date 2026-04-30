@@ -49,10 +49,35 @@ eventsRouter.get('/events', async (req, res) => {
     const result = await cache.getOrFetch(cacheKey, ttlSeconds, () =>
       eventsService.listEvents(cacheableFilter)
     );
+    const responseResult = timezone ? addLocalTimeToResult(result, timezone) : result;
 
-    res.json(timezone ? addLocalTimeToResult(result, timezone) : result);
+    res.json(toPaginatedResponse(responseResult));
   } catch (error) {
     console.error('GET /api/events failed:', error);
+    respondWithError(res, error);
+  }
+});
+
+eventsRouter.get('/events/:id', async (req, res) => {
+  const id = req.params.id;
+  const timezone = readTimezone(req.query);
+
+  if (timezone !== undefined && !isValidTimezone(timezone)) {
+    res.status(400).json({ error: 'Invalid query parameters', details: [`timezone "${timezone}" is not a valid IANA timezone`] });
+    return;
+  }
+
+  try {
+    const event = await cache.getOrFetch(`events:detail:${id}`, 900, () => eventsService.findById(id));
+
+    if (!event) {
+      res.status(404).json({ error: 'Evento nao encontrado' });
+      return;
+    }
+
+    res.json(timezone ? addLocalTime(event, timezone) : event);
+  } catch (error) {
+    console.error(`GET /api/events/${id} failed:`, error);
     respondWithError(res, error);
   }
 });
@@ -94,6 +119,18 @@ function addLocalTimeToResult(result: ListEventsResult, timezone: string): ListE
   return {
     ...result,
     events: result.events.map((event) => addLocalTime(event, timezone))
+  };
+}
+
+function toPaginatedResponse(result: ListEventsResult) {
+  return {
+    data: result.events,
+    pagination: {
+      page: result.page,
+      limit: result.limit,
+      total: result.total,
+      hasNextPage: result.page * result.limit < result.total
+    }
   };
 }
 
@@ -140,4 +177,24 @@ function normalizeOffset(stripped: string): string {
   const hours = (match[2] ?? '0').padStart(2, '0');
   const minutes = (match[3] ?? '00').padStart(2, '0');
   return `${sign}${hours}:${minutes}`;
+}
+
+function readTimezone(query: Record<string, unknown>): string | undefined {
+  const tz = readString(query.tz);
+  return tz ?? readString(query.timezone);
+}
+
+function readString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function isValidTimezone(timezone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone });
+    return true;
+  } catch {
+    return false;
+  }
 }

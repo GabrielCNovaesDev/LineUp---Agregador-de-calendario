@@ -62,6 +62,16 @@ async function testRejectsNonPositivePagination() {
   assert.equal(errors.length, 2);
 }
 
+async function testRejectsLimitAboveMax() {
+  const errors = expectErrors({ limit: '101' });
+  assert.ok(errors.some((e) => e.includes('limit')));
+}
+
+async function testParsesTzAlias() {
+  const filter = expectOk({ tz: 'America/Sao_Paulo' });
+  assert.equal(filter.timezone, 'America/Sao_Paulo');
+}
+
 async function testRejectsInvalidTimezone() {
   const errors = expectErrors({ timezone: 'Mars/Olympus_Mons' });
   assert.ok(errors.some((e) => e.includes('timezone')));
@@ -77,6 +87,8 @@ const tests = [
   ['rejects unknown status', testRejectsUnknownStatus],
   ['parses pagination', testParsesPagination],
   ['rejects non-positive pagination', testRejectsNonPositivePagination],
+  ['rejects limit above max', testRejectsLimitAboveMax],
+  ['parses tz alias', testParsesTzAlias],
   ['rejects invalid timezone', testRejectsInvalidTimezone]
 ] as const;
 
