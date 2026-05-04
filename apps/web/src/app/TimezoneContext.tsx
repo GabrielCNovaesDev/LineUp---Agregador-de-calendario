@@ -1,5 +1,9 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import { getUserTimezone, setUserTimezone as persistTimezone } from '../lib/timezone';
+import {
+  getUserTimezone,
+  isValidTimezone,
+  setUserTimezone as persistTimezone
+} from '../lib/timezone';
 
 interface TimezoneContextValue {
   timezone: string;
@@ -12,6 +16,7 @@ export function TimezoneProvider({ children }: { children: ReactNode }) {
   const [timezone, setTimezone] = useState<string>(() => getUserTimezone());
 
   const update = useCallback((tz: string) => {
+    if (!isValidTimezone(tz)) return;
     persistTimezone(tz);
     setTimezone(tz);
   }, []);

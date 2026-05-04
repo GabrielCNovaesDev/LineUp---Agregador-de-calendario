@@ -2,7 +2,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import type { Event, EventStatus, Sport, SportCategory } from '../lib/types';
-import { dayjs, formatEventTime } from '../lib/timezone';
+import { dayjs, formatEventTime, formatTimezoneName, getTimeUntilEvent } from '../lib/timezone';
 import { useTimezone } from '../app/TimezoneContext';
 
 const PAGE_SIZE = 30;
@@ -100,7 +100,7 @@ export function CalendarPage() {
           <div>
             <h1 className="text-lg font-semibold tracking-tight">Sports Calendar</h1>
             <p className="text-xs text-[var(--color-fg-muted)]">
-              Horarios em {formatTimezoneLabel(timezone)}
+              Horarios em {formatTimezoneName(timezone)}
             </p>
           </div>
           <Link
@@ -262,7 +262,7 @@ function EventCard({ event, userTimezone, onClick }: EventCardProps) {
         {formatEventTime(event.startsAt, userTimezone)}
       </p>
       <p className="mt-1 text-xs text-[var(--color-fg-muted)]">
-        horario local: {formatTimezoneLabel(userTimezone)}
+        horario local: {formatTimezoneName(userTimezone)}
       </p>
     </button>
   );
@@ -378,14 +378,6 @@ function formatDateLabel(dateKey: string, userTimezone: string): string {
 
 function getRelativeStatus(event: Event): string {
   if (event.status !== 'scheduled') return STATUS_LABELS[event.status];
-
-  const minutes = dayjs(event.startsAt).diff(dayjs(), 'minute');
-  if (minutes < 0) return '';
-  if (minutes < 60) return `EM ${minutes}MIN`;
-  if (minutes < 24 * 60) return `EM ${Math.floor(minutes / 60)}H`;
-  return '';
-}
-
-function formatTimezoneLabel(timezone: string): string {
-  return timezone.replace(/^America\//, '').replace(/_/g, ' ');
+  const relative = getTimeUntilEvent(event.startsAt);
+  return relative === 'Encerrado' || relative.includes('dias') ? '' : relative.toUpperCase();
 }

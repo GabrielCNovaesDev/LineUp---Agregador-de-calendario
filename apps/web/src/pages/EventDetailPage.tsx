@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import type { Event, EventStatus, SportCategory } from '../lib/types';
-import { dayjs, formatEventTime } from '../lib/timezone';
+import { dayjs, formatEventTime, formatTimezoneName } from '../lib/timezone';
 import { useTimezone } from '../app/TimezoneContext';
 
 const CATEGORY_META: Record<SportCategory, { emoji: string; label: string }> = {
@@ -161,7 +161,7 @@ export function EventDetailPage() {
               {event.roundNumber ? ` · Round ${event.roundNumber}` : ''}
             </p>
             <p className="text-xs text-[var(--color-fg-muted)]">
-              Exibido no seu fuso: {formatTimezoneLabel(timezone)}
+              Exibido no seu fuso: {formatTimezoneName(timezone)}
             </p>
           </DetailRow>
 
@@ -317,7 +317,7 @@ function formatGCalDate(date: string): string {
 
 function formatEventForShare(event: Event, timezone: string): string {
   const title = `${CATEGORY_META[event.sport.category]?.emoji ?? ''} ${event.title}${event.subtitle ? ` - ${event.subtitle}` : ''}`;
-  return `${title} (${event.sport.name})\n${formatEventTime(event.startsAt, timezone)} (${formatTimezoneLabel(timezone)})`;
+  return `${title} (${event.sport.name})\n${formatEventTime(event.startsAt, timezone)} (${formatTimezoneName(timezone)})`;
 }
 
 function formatDuration(event: Event, endsAt: string): string {
@@ -332,8 +332,4 @@ function formatLeadTime(minutes: number): string {
   if (minutes < 60) return `${minutes}min`;
   if (minutes === 1440) return '1 dia';
   return `${minutes / 60}h`;
-}
-
-function formatTimezoneLabel(timezone: string): string {
-  return timezone.replace(/^America\//, '').replace(/_/g, ' ');
 }
