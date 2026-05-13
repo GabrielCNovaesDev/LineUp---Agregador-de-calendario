@@ -1,4 +1,4 @@
-# Sports Calendar — Documento Principal
+# LineUp — Documento Principal
 
 > **Versão:** 1.0  
 > **Stack:** Node.js · TypeScript · PostgreSQL · Redis · React · PWA · Docker  
