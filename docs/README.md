@@ -1,537 +1,275 @@
-# LineUp — Documento Principal
+# LineUp — Agregador de Calendário Esportivo
 
-> **Versão:** 1.0  
-> **Stack:** Node.js · TypeScript · PostgreSQL · Redis · React · PWA · Docker  
-> **Duração estimada:** 8 semanas (4 sprints de 2 semanas)
+Calendário unificado de eventos de motorsport (F1, WEC, MotoGP) com conversão automática de fuso horário, agregando dados de múltiplas APIs externas em uma PWA mobile-first.
 
----
-
-## 1. Visão Geral do Projeto
-
-O **Sports Calendar** é um agregador universal de calendários esportivos, projetado para fãs de esportes de nicho que não têm uma fonte única e confiável de horários de eventos. O produto resolve um problema simples mas frustrante: quem quer acompanhar múltiplas categorias de um esporte (ex: F1, WEC, MotoGP, Endurance) precisa abrir vários sites diferentes para montar sua própria agenda.
-
-O sistema coleta automaticamente os calendários de múltiplas APIs esportivas, normaliza os dados em um formato único, e apresenta tudo em uma interface limpa com filtros por esporte e categoria — com suporte a notificações e exportação para Google Calendar.
-
-### Problema que resolve
-
-Fãs de esportes de nicho (motorsport, MMA, tênis) não têm uma visão unificada dos eventos que querem acompanhar. As soluções existentes são ou genéricas demais (focam em futebol) ou específicas demais (apenas F1, apenas UFC). Quem quer acompanhar WEC + Porsche Cup + MotoGP precisa de três apps diferentes.
-
-### Solução
-
-Um único calendário que agrega dados de múltiplas APIs esportivas oficiais, atualizado automaticamente via cron jobs, com exportação para iCal e notificações push configuráveis por evento.
-
-### Foco do MVP
-
-O MVP foca em **motorsport** como categoria principal (F1, WEC, MotoGP) por ser o nicho com melhores APIs gratuitas disponíveis e um público engajado. A arquitetura é construída para escalar facilmente para outros esportes (UFC, tênis) nas versões seguintes.
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue?logo=typescript)
+![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=node.js)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql)
+![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis)
 
 ---
 
-## 2. Arquitetura do Sistema
+## 🎯 Sobre o projeto
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    PWA / App Mobile (React)                   │
-│         Calendário · Filtros · Notificações · Export iCal    │
-└─────────────────────────┬────────────────────────────────────┘
-                          │ HTTP / REST
-┌─────────────────────────▼────────────────────────────────────┐
-│                      API (Express)                            │
-│           /events · /sports · /notifications · /export       │
-└──────┬──────────────────┬───────────────────────────────────-┘
-       │                  │
-┌──────▼──────┐   ┌───────▼────────────────────────────────────┐
-│  PostgreSQL │   │              Scheduler (node-cron)          │
-│  (eventos,  │   │                                             │
-│  usuários,  │   │  ┌──────────┐ ┌──────────┐ ┌────────────┐  │
-│  prefs,     │   │  │ OpenF1   │ │TheSports │ │ API-Sports │  │
-│  notif.)    │   │  │ (F1)     │ │DB (WEC,  │ │ (UFC,      │  │
-└──────┬──────┘   │  │          │ │ MotoGP)  │ │  Tênis)    │  │
-       │          │  └──────────┘ └──────────┘ └────────────┘  │
-┌──────▼──────┐   └────────────────────────────────────────────┘
-│    Redis    │
-│  (cache de  │
-│  respostas  │
-│  das APIs)  │
-└─────────────┘
-```
+Quem acompanha motorsport sabe o problema: calendários espalhados em sites diferentes, fusos horários confusos, e nenhuma fonte única que mostre "o que acontece essa semana" de forma clara. LineUp resolve isso agregando eventos de F1, WEC e MotoGP em um calendário unificado com horários convertidos automaticamente para o fuso do usuário.
 
-### Componentes principais
+O backend consome APIs externas (OpenF1 para Fórmula 1, TheSportsDB para WEC e MotoGP), normaliza os dados em um schema único, e os serve via REST API com cache inteligente. O frontend é uma PWA que funciona offline e prioriza a experiência mobile — onde a maioria dos fãs consulta horários de corrida.
 
-| Componente | Tecnologia | Responsabilidade |
-|---|---|---|
-| Frontend | React + TypeScript + Tailwind + PWA | Calendário, filtros, notificações, export |
-| API | Express + TypeScript | Endpoints REST, lógica de negócio |
-| Scheduler | node-cron | Jobs de coleta periódica por fonte |
-| Adaptadores | Módulos por fonte | Normalização de dados de cada API |
-| Cache | Redis | Cache de respostas das APIs externas |
-| Banco | PostgreSQL | Eventos, usuários, preferências, notificações |
+O projeto nasceu de uma necessidade pessoal e evoluiu para uma aplicação com arquitetura de produção: retry com backoff, circuit breaker no health check, detecção de falhas silenciosas, e separação clara entre adaptadores de dados e regras de negócio.
 
 ---
 
-## 3. Fontes de Dados
+## 🏗️ Arquitetura e decisões técnicas
 
-### 3.1 OpenF1 (Fórmula 1)
+```mermaid
+graph TB
+    subgraph External["APIs Externas"]
+        OF1[OpenF1 API]
+        TSDB[TheSportsDB API]
+    end
 
-- **URL:** `https://api.openf1.org/v1/`
-- **Auth:** Nenhuma (API pública e gratuita)
-- **Endpoints usados:**
-  - `GET /sessions` — sessões de treino, qualificação e corrida
-  - `GET /meetings` — etapas do calendário (Grand Prix)
-- **Frequência de atualização:** a cada 6 horas
-- **Limitações:** dados históricos ricos, dados futuros às vezes incompletos no início da temporada
+    subgraph Backend["apps/api — Express 5"]
+        SCHED[Scheduler / Cron Jobs]
+        ADAPT[Adapters — packages/adapters]
+        SVC[Services]
+        ROUTES[Routes / REST API]
+        CACHE[CacheService]
+    end
 
-### 3.2 TheSportsDB
+    subgraph Infra["Infraestrutura"]
+        PG[(PostgreSQL 16)]
+        RD[(Redis 7)]
+    end
 
-- **URL:** `https://www.thesportsdb.com/api/v1/json/{API_KEY}/`
-- **Auth:** API Key (tier gratuito disponível para desenvolvimento)
-- **Endpoints usados:**
-  - `GET /eventsseason.php?id={league_id}&s={season}` — eventos da temporada
-  - `GET /searchleagues.php?c={country}&s={sport}` — buscar ID de liga
-- **Ligas mapeadas:**
-  - WEC (World Endurance Championship) — id: 4370
-  - MotoGP — id: 4497
-  - Superbike — id: 4430
-- **Frequência de atualização:** a cada 12 horas
-- **Limitações:** tier gratuito tem rate limit de 100 req/dia
+    subgraph Frontend["apps/web — React 19 PWA"]
+        UI[CalendarPage / EventDetail]
+        RQ[React Query]
+    end
 
-### 3.3 API-Sports
-
-- **URL:** `https://v3.football.api-sports.io/` (domínio base — cada esporte tem subdomínio)
-  - MMA/UFC: `https://v1.mma.api-sports.io/`
-  - Tênis: `https://v1.tennis.api-sports.io/`
-- **Auth:** API Key no header `x-apisports-key`
-- **Tier gratuito:** 100 requisições/dia
-- **Frequência de atualização:** a cada 24 horas
-- **Uso no MVP:** reservado para v1.1 (UFC e Tênis)
-
-### 3.4 Estratégia geral de coleta
-
+    OF1 --> ADAPT
+    TSDB --> ADAPT
+    SCHED --> ADAPT
+    ADAPT --> SVC
+    SVC --> PG
+    ROUTES --> SVC
+    ROUTES --> CACHE
+    CACHE --> RD
+    UI --> RQ
+    RQ --> ROUTES
 ```
-Para cada fonte de dados:
-  1. Verificar se cache Redis ainda é válido (TTL por fonte)
-  2. Se válido: retornar do cache
-  3. Se expirado: chamar a API externa
-  4. Normalizar os dados para o schema interno
-  5. Salvar/atualizar no PostgreSQL
-  6. Atualizar o cache Redis
-  7. Registrar execução no log de jobs
-```
+
+### Decisões técnicas com trade-offs
+
+> **Decisão:** Monorepo com npm workspaces (sem Turborepo/Nx)
+> **Alternativas consideradas:** Monolito único, monorepo com Turborepo, repositórios separados
+> **Por quê:** O projeto tem 3 pacotes com dependências claras entre si. Workspaces nativos do npm resolvem o linking sem adicionar complexidade de ferramentas externas.
+> **Trade-off aceito:** Sem cache de build distribuído — aceitável para o tamanho atual do projeto.
+
+> **Decisão:** Adapter Pattern para fontes externas com interface `SportAdapter`
+> **Alternativas consideradas:** Fetch direto nos services, SDK de cada API, scraping
+> **Por quê:** Cada API tem formato, rate limit e comportamento de erro diferentes. O adapter isola essa complexidade e permite adicionar novas fontes sem tocar no scheduler ou nos services.
+> **Trade-off aceito:** Mais arquivos e indireção para 3 fontes — compensa quando a quarta chegar.
+
+> **Decisão:** Cache com fallback gracioso (Redis opcional)
+> **Alternativas consideradas:** Cache obrigatório (falha = 503), sem cache
+> **Por quê:** Redis fora não deve derrubar a API. O `CacheService` trata qualquer erro de Redis como cache miss e vai direto ao banco. O health check usa circuit breaker para evitar que o load balancer drene todas as instâncias em outage global de Redis.
+> **Trade-off aceito:** Latência maior quando Redis está fora, mas disponibilidade preservada.
+
+> **Decisão:** Upsert com throttle temporal (`WHERE updated_at < NOW() - INTERVAL '1 hour'`)
+> **Alternativas consideradas:** Upsert incondicional, diff de hash, versioning
+> **Por quê:** Evita writes desnecessários quando o cron roda a cada 6h mas os dados não mudaram. Reduz I/O no banco sem complexidade de hashing.
+> **Trade-off aceito:** Mudanças feitas pela API externa dentro da janela de 1h podem demorar até o próximo ciclo para refletir.
 
 ---
 
-## 4. Modelo de Dados
+## 🛠️ Stack
 
-### Tabelas principais (PostgreSQL)
-
-```sql
--- Esportes e categorias
-sports (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  slug        TEXT UNIQUE NOT NULL,   -- 'f1', 'wec', 'motogp', 'ufc'
-  name        TEXT NOT NULL,          -- 'Fórmula 1', 'WEC', 'MotoGP'
-  category    TEXT NOT NULL,          -- 'motorsport', 'mma', 'tennis'
-  icon_url    TEXT,
-  is_active   BOOLEAN DEFAULT true,
-  created_at  TIMESTAMPTZ DEFAULT NOW()
-)
-
--- Temporadas por esporte
-seasons (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  sport_id    UUID REFERENCES sports(id),
-  year        INTEGER NOT NULL,
-  is_current  BOOLEAN DEFAULT false,
-  created_at  TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(sport_id, year)
-)
-
--- Eventos (corridas, etapas, lutas, partidas)
-events (
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  sport_id        UUID REFERENCES sports(id),
-  season_id       UUID REFERENCES seasons(id),
-  
-  -- Identificação
-  external_id     TEXT NOT NULL,           -- ID na API de origem
-  source          TEXT NOT NULL,           -- 'openf1' | 'thesportsdb' | 'apisports'
-  
-  -- Dados do evento
-  title           TEXT NOT NULL,           -- 'Grande Prêmio do Brasil'
-  subtitle        TEXT,                    -- 'Corrida Principal' (para sessões dentro de um evento)
-  venue           TEXT,                    -- 'Autódromo José Carlos Pace'
-  country         TEXT,
-  round_number    INTEGER,                 -- posição no calendário da temporada
-  
-  -- Tempo (sempre em UTC)
-  starts_at       TIMESTAMPTZ NOT NULL,
-  ends_at         TIMESTAMPTZ,             -- nem sempre disponível
-  duration_minutes INTEGER,
-  
-  -- Status
-  status          TEXT DEFAULT 'scheduled', -- 'scheduled' | 'live' | 'completed' | 'cancelled' | 'postponed'
-  
-  -- Metadados
-  raw_data        JSONB,                   -- resposta original da API (para debug)
-  created_at      TIMESTAMPTZ DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ DEFAULT NOW(),
-  
-  UNIQUE(source, external_id)              -- evitar duplicatas entre syncs
-)
-
--- Usuários (auth simplificada via e-mail magic link)
-users (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email       TEXT UNIQUE NOT NULL,
-  timezone    TEXT NOT NULL DEFAULT 'America/Sao_Paulo',
-  created_at  TIMESTAMPTZ DEFAULT NOW(),
-  last_seen   TIMESTAMPTZ
-)
-
--- Preferências de esportes por usuário
-user_sport_preferences (
-  user_id     UUID REFERENCES users(id) ON DELETE CASCADE,
-  sport_id    UUID REFERENCES sports(id),
-  PRIMARY KEY (user_id, sport_id)
-)
-
--- Notificações configuradas
-notification_subscriptions (
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id         UUID REFERENCES users(id) ON DELETE CASCADE,
-  event_id        UUID REFERENCES events(id) ON DELETE CASCADE,
-  minutes_before  INTEGER NOT NULL DEFAULT 30,  -- avisar X min antes
-  push_endpoint   TEXT,                          -- Web Push endpoint
-  push_keys       JSONB,                         -- p256dh e auth keys
-  sent_at         TIMESTAMPTZ,                   -- null = ainda não enviada
-  created_at      TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(user_id, event_id, minutes_before)
-)
-
--- Log de execução dos jobs de coleta
-sync_log (
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  source          TEXT NOT NULL,
-  sport_slug      TEXT NOT NULL,
-  started_at      TIMESTAMPTZ NOT NULL,
-  finished_at     TIMESTAMPTZ,
-  events_upserted INTEGER DEFAULT 0,
-  events_skipped  INTEGER DEFAULT 0,
-  error           TEXT,                          -- null = sucesso
-  status          TEXT DEFAULT 'running'         -- 'running' | 'success' | 'failed'
-)
-```
-
-### Índices importantes
-
-```sql
-CREATE INDEX idx_events_starts_at ON events(starts_at);
-CREATE INDEX idx_events_sport_id ON events(sport_id);
-CREATE INDEX idx_events_status ON events(status);
-CREATE INDEX idx_events_source_external ON events(source, external_id);
-CREATE INDEX idx_notif_subs_user ON notification_subscriptions(user_id);
-CREATE INDEX idx_notif_subs_unsent ON notification_subscriptions(sent_at) WHERE sent_at IS NULL;
-```
+| Camada | Tecnologia | Por que escolhi |
+|--------|-----------|-----------------|
+| Runtime | Node.js 20 + TypeScript 5.8 | Type safety end-to-end entre API e frontend |
+| API | Express 5 | Framework maduro, middleware ecosystem, suporte nativo a async handlers |
+| Banco | PostgreSQL 16 | JSONB para raw_data, UUID nativo, TIMESTAMPTZ para datas em UTC |
+| Cache | Redis 7 + ioredis | TTL granular por tipo de dado, invalidação por pattern após sync |
+| Scheduler | node-cron | Leve, sem dependência externa, suficiente para jobs periódicos |
+| Frontend | React 19 + Vite 6 | HMR rápido, tree-shaking, build otimizado para PWA |
+| Styling | Tailwind CSS 4 | Utility-first, sem CSS custom, dark mode nativo |
+| Data fetching | TanStack Query 5 | Cache client-side, paginação infinita, stale-while-revalidate |
+| PWA | vite-plugin-pwa + Workbox | Service worker gerado automaticamente, offline support |
+| Infra local | Docker Compose | PostgreSQL + Redis com um comando, sem instalar nada na máquina |
 
 ---
 
-## 5. Normalização de Dados
-
-Cada fonte de dados tem seu próprio formato. O processo de normalização converte todos os formatos para o schema interno.
-
-### Interface do Adaptador
-
-```typescript
-// packages/adapters/src/types.ts
-export interface SportAdapter {
-  readonly sourceId: string;          // 'openf1' | 'thesportsdb' | 'apisports'
-  readonly sportSlug: string;         // 'f1' | 'wec' | 'motogp'
-  
-  fetchEvents(season: number): Promise<NormalizedEvent[]>;
-}
-
-export interface NormalizedEvent {
-  externalId: string;
-  source: string;
-  sportSlug: string;
-  title: string;
-  subtitle?: string;
-  venue?: string;
-  country?: string;
-  roundNumber?: number;
-  startsAt: Date;        // sempre UTC
-  endsAt?: Date;
-  durationMinutes?: number;
-  status: EventStatus;
-  rawData: unknown;      // resposta original preservada
-}
-
-export type EventStatus = 'scheduled' | 'live' | 'completed' | 'cancelled' | 'postponed';
-```
-
-### Regras de normalização por campo
-
-| Campo | Regra |
-|---|---|
-| `startsAt` | Sempre converter para UTC. Usar `dayjs.utc()`. Se a fonte não informar fuso, assumir UTC e logar warning |
-| `title` | Usar nome do evento/etapa, não abreviações. Ex: "Grande Prêmio da Austrália", não "AUS GP" |
-| `status` | Mapear strings da API para o enum interno. Ignorar status desconhecidos com warning |
-| `externalId` | Sempre prefixar com a fonte: `openf1:{id}`, `thesportsdb:{id}` |
-| `durationMinutes` | Se `endsAt` disponível: calcular. Se não: usar duração padrão por tipo de evento |
-
----
-
-## 6. API REST
-
-### Endpoints principais
+## 📁 Estrutura de pastas
 
 ```
-GET  /api/sports                    → lista todos os esportes ativos
-GET  /api/events                    → lista eventos com filtros
-GET  /api/events/:id                → detalhe de um evento
-GET  /api/events/export/ical        → export iCal dos eventos filtrados
-POST /api/users                     → criar/autenticar usuário (magic link)
-GET  /api/users/me/preferences      → preferências do usuário autenticado
-PUT  /api/users/me/preferences      → atualizar esportes favoritos e fuso
-POST /api/notifications/subscribe   → inscrever em notificação de um evento
-DELETE /api/notifications/:id       → cancelar inscrição
-GET  /api/admin/sync-log            → log dos jobs de coleta (interno)
-POST /api/admin/sync/:sportSlug     → disparar sync manual (interno)
-```
-
-### Parâmetros do endpoint de eventos
-
-```
-GET /api/events
-  ?sports=f1,wec,motogp     → filtrar por slug de esporte (separados por vírgula)
-  &from=2025-05-01          → data inicial (ISO 8601, UTC)
-  &to=2025-05-31            → data final (ISO 8601, UTC)
-  &status=scheduled         → filtrar por status
-  &page=1                   → paginação
-  &limit=50                 → itens por página (máx 100)
-```
-
-### Resposta padrão de evento
-
-```json
-{
-  "id": "uuid",
-  "sport": { "slug": "f1", "name": "Fórmula 1", "category": "motorsport" },
-  "title": "Grande Prêmio da Austrália",
-  "subtitle": "Corrida",
-  "venue": "Albert Park Circuit",
-  "country": "Austrália",
-  "roundNumber": 3,
-  "startsAt": "2025-03-16T05:00:00Z",
-  "endsAt": "2025-03-16T07:00:00Z",
-  "durationMinutes": 120,
-  "status": "scheduled",
-  "localTime": "2025-03-16T02:00:00-03:00"  // calculado com base no timezone do usuário
-}
-```
-
----
-
-## 7. Export iCal
-
-O endpoint `GET /api/events/export/ical` gera um arquivo `.ics` compatível com Google Calendar, Apple Calendar e Outlook.
-
-### Exemplo de evento iCal gerado
-
-```
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Sports Calendar//EN
-CALSCALE:GREGORIAN
-METHOD:PUBLISH
-X-WR-CALNAME:Sports Calendar - F1 + WEC
-X-WR-TIMEZONE:America/Sao_Paulo
-
-BEGIN:VEVENT
-UID:f1-gp-australia-2025@sportscalendar.app
-DTSTART:20250316T050000Z
-DTEND:20250316T070000Z
-SUMMARY:🏎 GP Austrália — Corrida (F1)
-DESCRIPTION:Fórmula 1 · Round 3 · Albert Park Circuit\nAustrália
-LOCATION:Albert Park Circuit, Melbourne, Austrália
-STATUS:CONFIRMED
-END:VEVENT
-
-END:VCALENDAR
-```
-
-### Regras do iCal
-
-- `UID` é determinístico: `{sportSlug}-{externalId}@sportscalendar.app` — garante que reimportar não cria duplicatas
-- `DTSTART` e `DTEND` sempre em UTC
-- `SUMMARY` inclui emoji por categoria: 🏎 motorsport, 🥊 MMA, 🎾 tênis
-- Eventos sem `endsAt` usam `DTEND = DTSTART + duração padrão por esporte`
-
----
-
-## 8. Notificações Push (Web Push)
-
-O sistema usa a **Web Push API** (padrão VAPID) para enviar notificações sem app nativo.
-
-### Fluxo de inscrição
-
-```
-1. Usuário clica "Notificar X min antes" em um evento
-2. Browser pede permissão de notificação
-3. Frontend chama ServiceWorker.pushManager.subscribe()
-4. Frontend envia { endpoint, keys } para POST /api/notifications/subscribe
-5. Backend salva na tabela notification_subscriptions
-```
-
-### Disparo de notificações (cron job)
-
-```
-A cada 5 minutos:
-  1. Buscar notificações não enviadas cujo evento começa em <= minutes_before minutos
-  2. Para cada notificação: chamar Web Push API com o endpoint salvo
-  3. Marcar sent_at = NOW()
-  4. Se endpoint inválido (410 Gone): deletar a inscrição
-```
-
-### Payload da notificação push
-
-```json
-{
-  "title": "🏎 F1 começa em 30 minutos!",
-  "body": "Grande Prêmio da Austrália — Corrida · Albert Park Circuit",
-  "icon": "/icons/f1-192.png",
-  "data": { "eventId": "uuid", "url": "/events/uuid" }
-}
-```
-
----
-
-## 9. PWA (Progressive Web App)
-
-O frontend é uma PWA para ter experiência próxima de app nativo sem passar pela app store.
-
-### Requisitos PWA
-
-- `manifest.json` com ícones em múltiplos tamanhos (72, 96, 128, 144, 152, 192, 384, 512px)
-- Service Worker para:
-  - Cache offline das páginas principais
-  - Recepção de notificações push em background
-- `meta theme-color` para personalização da barra do browser
-- Tela de splash e ícone para "Add to Home Screen"
-
-### Modo offline
-
-Quando sem conexão:
-- Calendário mostra eventos já carregados (cache do Service Worker)
-- Banner "Você está offline — dados podem estar desatualizados"
-- Ações que requerem internet (inscrever em notificação) são desabilitadas com tooltip explicativo
-
----
-
-## 10. Estrutura de Pastas
-
-```
-sports-calendar/
+LineUp---Agregador-de-calendario/
 ├── apps/
-│   ├── api/                        # Express API
+│   ├── api/                    # Backend REST — Express 5
 │   │   ├── src/
-│   │   │   ├── routes/             # endpoints REST
-│   │   │   ├── middleware/         # auth, rate limit, error handling
-│   │   │   ├── scheduler/          # cron jobs de coleta
-│   │   │   └── index.ts
-│   │   └── package.json
-│   └── web/                        # React PWA
-│       ├── public/
-│       │   ├── manifest.json
-│       │   └── sw.js               # Service Worker
-│       ├── src/
-│       │   ├── pages/              # Calendar, EventDetail, Settings
-│       │   ├── components/         # EventCard, SportFilter, CalendarGrid
-│       │   └── lib/                # api client, push, ical
-│       └── package.json
+│   │   │   ├── config/         # Variáveis de ambiente tipadas
+│   │   │   ├── lib/            # Database pool, Redis client, CacheService
+│   │   │   ├── middleware/     # Error handler centralizado
+│   │   │   ├── routes/         # Endpoints REST (events, health, admin)
+│   │   │   ├── scheduler/      # Cron jobs + SyncRunner
+│   │   │   └── services/       # Regras de negócio (upsert, listagem, freshness, alertas)
+│   │   └── openapi.yaml        # Especificação OpenAPI 3.0 completa
+│   └── web/                    # Frontend PWA — React 19
+│       └── src/
+│           ├── app/            # Layout, router, contextos (timezone)
+│           ├── lib/            # API client, tipos, utilitários de timezone
+│           └── pages/          # CalendarPage, EventDetail, Settings, Onboarding
 ├── packages/
-│   ├── adapters/                   # Adaptadores por fonte de dados
-│   │   ├── src/
-│   │   │   ├── openf1/
-│   │   │   ├── thesportsdb/
-│   │   │   └── types.ts
-│   │   └── package.json
-│   └── shared/                     # Types e utils compartilhados
-│       ├── src/
-│       │   ├── types/
-│       │   └── utils/date.ts       # helpers de fuso horário (dayjs)
-│       └── package.json
+│   ├── adapters/               # Adaptadores para APIs externas (OpenF1, TheSportsDB)
+│   └── shared/                 # Tipos compartilhados (EventStatus, etc.)
 ├── infra/
-│   ├── docker-compose.yml
-│   ├── docker-compose.prod.yml
-│   └── migrations/
-├── docs/
-│   ├── README.md                   # Este arquivo
-│   ├── sprint-1.md
-│   ├── sprint-2.md
-│   ├── sprint-3.md
-│   └── sprint-4.md
-└── package.json
+│   ├── docker-compose.yml      # PostgreSQL 16 + Redis 7
+│   ├── migrate.js              # Runner de migrations
+│   └── migrations/             # 12 migrations SQL sequenciais
+├── docs/                       # ADRs, runbooks, estratégia de resiliência
+└── package.json                # Workspace root
 ```
 
 ---
 
-## 11. Variáveis de Ambiente
+## 🚀 Como rodar localmente
 
-```env
-# Banco
-DATABASE_URL=postgresql://user:pass@localhost:5432/sportscalendar
+### Pré-requisitos
 
-# Redis
-REDIS_URL=redis://localhost:6379
+- Node.js 20+
+- Docker 24+ e Docker Compose
+- npm 10+
 
-# APIs externas
-THESPORTSDB_API_KEY=
-APISPORTS_KEY=
-# OpenF1 não precisa de key
+### Passo a passo
 
-# Web Push (VAPID)
-VAPID_PUBLIC_KEY=
-VAPID_PRIVATE_KEY=
-VAPID_SUBJECT=mailto:contato@sportscalendar.app
+```bash
+# 1. Clone o repositório
+git clone https://github.com/GabrielCNovaesDev/LineUp---Agregador-de-calendario.git
+cd LineUp---Agregador-de-calendario
 
-# Auth (magic link via e-mail)
-SMTP_HOST=
-SMTP_PORT=587
-SMTP_USER=
-SMTP_PASS=
-MAGIC_LINK_SECRET=
+# 2. Instale as dependências (workspaces resolvem tudo)
+npm install
 
-# App
-PORT=3000
-NODE_ENV=development
-FRONTEND_URL=http://localhost:5173
+# 3. Configure as variáveis de ambiente
+cp .env.example .env
+
+# 4. Suba a infraestrutura (PostgreSQL + Redis)
+docker compose -f infra/docker-compose.yml up -d
+
+# 5. Rode as migrations
+npm run migrate
+
+# 6. Inicie API + Frontend simultaneamente
+npm run dev
 ```
 
----
+### Verificando que funcionou
 
-## 12. Decisões Técnicas e Justificativas
+- **API:** `http://localhost:3000/health` → deve retornar `{ "status": "ok" }`
+- **Frontend:** `http://localhost:5173` → calendário com eventos carregados
+- **Endpoints:** `http://localhost:3000/api/events` → lista de eventos paginada
 
-| Decisão | Alternativa considerada | Justificativa |
-|---|---|---|
-| APIs oficiais em vez de scraping | Web scraping com Playwright | Scraping quebra silenciosamente; APIs são estáveis e confiáveis |
-| PWA em vez de React Native | React Native / Expo | Dev já conhece React; PWA é mais rápido de MVP; notificações push funcionam bem |
-| node-cron em vez de BullMQ | BullMQ, AWS EventBridge | Jobs simples de coleta não precisam de fila complexa; node-cron é suficiente |
-| dayjs em vez de date-fns | date-fns, Luxon | Melhor suporte a fuso horário com plugin timezone; API mais simples |
-| Magic link em vez de OAuth | Google OAuth, senha | Menor atrito no onboarding; sem dependência de provedor externo |
-| Upsert com UNIQUE(source, external_id) | Lógica manual de deduplicação | Simples, confiável e atômico — banco garante sem código adicional |
+O comando `npm run dev` já sobe a infra, roda migrations e inicia ambos os servidores com hot reload.
 
 ---
 
-## 13. Referências
+## 🔐 Variáveis de ambiente
 
-- [OpenF1 API Docs](https://openf1.org/#introduction)
-- [TheSportsDB API](https://www.thesportsdb.com/api.php)
-- [API-Sports Docs](https://www.api-football.com/documentation-v3)
-- [Web Push Protocol (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Push_API)
-- [iCalendar RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545)
-- [dayjs timezone plugin](https://day.js.org/docs/en/plugin/timezone)
-- [Vite PWA Plugin](https://vite-pwa-org.netlify.app/)
+| Variável | Descrição | Exemplo | Obrigatória? |
+|----------|-----------|---------|:------------:|
+| `DATABASE_URL` | Connection string do PostgreSQL | `postgresql://postgres:postgres@localhost:5432/sportscalendar` | Sim |
+| `REDIS_URL` | Connection string do Redis | `redis://localhost:6379` | Sim |
+| `PORT` | Porta da API | `3000` | Não (default: 3000) |
+| `NODE_ENV` | Ambiente de execução | `development` | Não |
+| `FRONTEND_URL` | URL do frontend (CORS) | `http://localhost:5173` | Sim |
+| `ADMIN_SECRET` | Token para endpoints administrativos | `change-me-in-development` | Sim |
+| `THESPORTSDB_API_KEY` | Chave da API TheSportsDB | `3` (chave pública de teste) | Sim |
+| `SCHEDULER_ENABLED` | Ativa/desativa cron jobs | `true` | Não (default: true) |
+| `SCHEDULER_RUN_ON_START` | Sync inicial ao subir o servidor | `true` | Não (default: true) |
+| `REDIS_HEALTH_GRACE_PERIOD_SECONDS` | Tempo antes do circuit breaker aceitar Redis fora | `120` | Não (default: 120) |
 
 ---
 
-*Documentação gerada para uso como contexto de agentes de IA. Atualizar sempre que decisões de arquitetura ou fontes de dados forem alteradas.*
+## 📡 Endpoints principais
+
+| Método | Rota | Descrição | Auth? |
+|--------|------|-----------|:-----:|
+| GET | `/health` | Health check (DB + Redis + circuit breaker) | Não |
+| GET | `/api/events` | Listar eventos com filtros, paginação e timezone | Não |
+| GET | `/api/events/:id` | Detalhe de um evento por UUID | Não |
+| GET | `/api/events/freshness` | Frescor dos dados por esporte (stale detection) | Não |
+| GET | `/api/sports` | Listar esportes ativos | Não |
+| POST | `/api/admin/sync/:sportSlug` | Disparar sync manual de um esporte | Sim |
+| GET | `/api/admin/sync-log` | Histórico de execuções do scheduler | Sim |
+| GET | `/api/admin/alerts` | Alertas de falhas silenciosas | Sim |
+
+Especificação OpenAPI completa em [`apps/api/openapi.yaml`](apps/api/openapi.yaml).
+
+---
+
+## 🧪 Testes
+
+```bash
+# Rodar todos os testes (API)
+npm test --workspace=apps/api
+
+# Typecheck do monorepo inteiro
+npm run typecheck
+```
+
+**Estratégia de testes:**
+- **Unitários:** Services (upsert, validação, freshness, alertas), middleware de erro, parser de query params, sync runner, adapters (OpenF1, TheSportsDB) — todos com fixtures determinísticas
+- **Framework:** Node.js native test runner (`node:test` + `node:assert`) — zero dependências externas para testes
+- **Adapters:** Testados com fetch mockado e fixtures reais das APIs externas
+
+---
+
+## 🗺️ Roadmap
+
+- [x] Schema do banco + migrations (sports, seasons, events, users, sync_log, alerts)
+- [x] Adaptador OpenF1 (Fórmula 1) com retry + backoff
+- [x] Adaptador TheSportsDB (WEC + MotoGP) com throttle
+- [x] API REST completa com paginação, filtros e conversão de timezone
+- [x] Cache Redis com invalidação automática pós-sync
+- [x] Cron jobs para atualização periódica (F1: 6h, WEC: 12h, MotoGP: 12h)
+- [x] Health check com circuit breaker para Redis
+- [x] Sistema de alertas para detecção de falhas silenciosas
+- [x] Frontend PWA com calendário, filtros por esporte e detalhe de evento
+- [x] Conversão de fuso horário no frontend
+- [x] Endpoint de freshness para banner "dados desatualizados"
+- [x] Especificação OpenAPI 3.0
+- [ ] Deploy em cloud (AWS/Railway) + CI/CD com GitHub Actions
+- [ ] Novos esportes: UFC e Tênis (adapters já preparados)
+- [ ] Notificações push via PWA para eventos próximos
+- [ ] Refresh token e autenticação de usuários
+
+---
+
+## 📚 Aprendizados
+
+- Implementei retry com backoff exponencial nos adapters e percebi na prática que sem timeout no `fetch` o retry vira uma fila infinita — o `AbortController` com deadline fixa foi essencial para manter o scheduler previsível.
+
+- Descobri que tratar Redis como "opcional que pode cair a qualquer momento" desde o início simplifica muito a arquitetura. O `CacheService` com try/catch em toda operação eliminou uma classe inteira de bugs de produção antes de chegar lá.
+
+- O circuit breaker no health check parece over-engineering para um MVP, mas a lógica é uma função pura de 10 linhas que evita um cenário real: Redis global fora = load balancer drena todas as instâncias = downtime total mesmo com banco saudável.
+
+- Aprendi que `ON CONFLICT DO UPDATE` sem throttle temporal gera writes desnecessários a cada ciclo de sync. A cláusula `WHERE updated_at < NOW() - INTERVAL '1 hour'` reduziu os upserts efetivos em ~90% nos ciclos sem mudanças reais.
+
+- A detecção de "3 syncs consecutivos com 0 eventos" foi a feature mais difícil de justificar e a mais importante: falhas silenciosas (adapter retorna `[]` por mudança de API) não disparam nenhum catch e podem passar dias sem ninguém perceber.
+
+- Separar os adapters em um pacote independente (`packages/adapters`) com interface `SportAdapter` tornou trivial adicionar WEC e MotoGP depois do F1 — cada adapter é um arquivo isolado que implementa `fetchEvents(season)` e não sabe nada sobre banco, cache ou scheduler.
+
+---
+
+## 📄 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para detalhes.
+
+---
+
+## 👤 Autor
+
+**Gabriel Novaes**
+
+- [LinkedIn](https://www.linkedin.com/in/gabrielhcnovaes/)
+- [GitHub](https://github.com/GabrielCNovaesDev)
