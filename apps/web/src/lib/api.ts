@@ -95,7 +95,11 @@ export const api = {
   subscribeToNotification(params: {
     eventId: string;
     minutesBefore: number;
-    timezone: string;
+    subscription?: {
+      endpoint: string;
+      keys: { p256dh: string; auth: string };
+    };
+    timezone?: string;
   }): Promise<{ id?: string; message?: string }> {
     return post<{ id?: string; message?: string }>('/api/notifications/subscribe', params);
   },

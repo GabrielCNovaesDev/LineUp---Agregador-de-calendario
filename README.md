@@ -238,9 +238,12 @@ npm run typecheck
 - [x] Conversão de fuso horário no frontend
 - [x] Endpoint de freshness para banner "dados desatualizados"
 - [x] Especificação OpenAPI 3.0
-- [ ] Deploy em cloud (AWS/Railway) + CI/CD com GitHub Actions
+- [x] Notificações push via PWA para eventos próximos
+- [x] CI/CD com GitHub Actions
+- [x] Dockerfile para deploy do backend
+- [x] Configuração Vercel para deploy do frontend
+- [ ] Deploy em cloud (Railway) + domínio personalizado
 - [ ] Novos esportes: UFC e Tênis (adapters já preparados)
-- [ ] Notificações push via PWA para eventos próximos
 - [ ] Refresh token e autenticação de usuários
 
 ---

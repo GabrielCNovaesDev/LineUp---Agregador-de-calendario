@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api, ApiError } from '../lib/api';
+import { api } from '../lib/api';
+import { subscribeToEvent, isPushSupported } from '../lib/push';
 import type { Event, EventStatus, SportCategory } from '../lib/types';
 import { dayjs, formatEventTime, formatTimezoneName } from '../lib/timezone';
 import { useTimezone } from '../app/TimezoneContext';
@@ -58,17 +59,9 @@ export function EventDetailPage() {
   async function handleNotifyClick() {
     if (!event) return;
 
-    if (!('Notification' in window)) {
-      showToast('Este navegador nao suporta notificacoes.');
+    if (!isPushSupported()) {
+      showToast('Este navegador nao suporta notificacoes push.');
       return;
-    }
-
-    if (Notification.permission === 'default') {
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') {
-        showToast('Permissao de notificacao nao concedida.');
-        return;
-      }
     }
 
     if (Notification.permission === 'denied') {
@@ -83,19 +76,11 @@ export function EventDetailPage() {
     if (!event) return;
     setIsSubscribing(true);
     try {
-      await api.subscribeToNotification({
-        eventId: event.id,
-        minutesBefore,
-        timezone
-      });
+      await subscribeToEvent(event.id, minutesBefore);
       showToast(`Voce sera notificado ${formatLeadTime(minutesBefore)} antes do evento.`);
       setShowNotifyOptions(false);
     } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
-        showToast('Notificacoes entram na proxima etapa da API.');
-      } else {
-        showToast(error instanceof Error ? error.message : 'Nao foi possivel criar a notificacao.');
-      }
+      showToast(error instanceof Error ? error.message : 'Nao foi possivel criar a notificacao.');
     } finally {
       setIsSubscribing(false);
     }

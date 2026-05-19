@@ -4,9 +4,13 @@ export const env = {
   redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
   port: Number(process.env.PORT ?? 3000),
   nodeEnv: process.env.NODE_ENV ?? 'development',
+  frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:5173',
   adminSecret: process.env.ADMIN_SECRET,
   thesportsdbApiKey: process.env.THESPORTSDB_API_KEY ?? '3',
   schedulerEnabled: (process.env.SCHEDULER_ENABLED ?? 'true').toLowerCase() !== 'false',
   schedulerRunOnStart: (process.env.SCHEDULER_RUN_ON_START ?? 'true').toLowerCase() !== 'false',
-  redisHealthGracePeriodSeconds: Number(process.env.REDIS_HEALTH_GRACE_PERIOD_SECONDS ?? 120)
+  redisHealthGracePeriodSeconds: Number(process.env.REDIS_HEALTH_GRACE_PERIOD_SECONDS ?? 120),
+  vapidSubject: process.env.VAPID_SUBJECT ?? 'mailto:admin@lineup.app',
+  vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? ''
 };

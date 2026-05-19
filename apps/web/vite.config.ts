@@ -9,7 +9,7 @@ export default defineConfig({
     tailwind(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
+      includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png', 'sw-push.js'],
       manifest: {
         name: 'LineUp — Sports Calendar',
         short_name: 'LineUp',
@@ -28,6 +28,7 @@ export default defineConfig({
         ]
       },
       workbox: {
+        importScripts: ['sw-push.js'],
         navigateFallback: '/index.html',
         runtimeCaching: [
           {

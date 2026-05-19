@@ -8,6 +8,7 @@ import { EventsService } from '../services/events.service.js';
 import { f1Job } from './jobs/f1.job.js';
 import { motogpJob } from './jobs/motogp.job.js';
 import { wecJob } from './jobs/wec.job.js';
+import { runNotificationsJob } from './jobs/notifications.job.js';
 import { startJob, SyncRunner, type StartedSyncJob, type SyncJob } from './runner.js';
 
 interface SchedulerHandle {
@@ -34,6 +35,13 @@ export function startScheduler(): SchedulerHandle {
     return task;
   });
 
+  const notifTask = cron.schedule('*/5 * * * *', () => {
+    void runNotificationsJob().catch((err) =>
+      console.error('[scheduler] notifications job failed:', err)
+    );
+  });
+  console.log('[scheduler] job scheduled: Notifications (*/5 * * * *)');
+
   if (env.schedulerRunOnStart) {
     console.log('[scheduler] running initial sync');
     void runAll(runner);
@@ -44,6 +52,7 @@ export function startScheduler(): SchedulerHandle {
       for (const task of tasks) {
         task.stop();
       }
+      notifTask.stop();
     },
     triggerAll: () => runAll(runner)
   };
