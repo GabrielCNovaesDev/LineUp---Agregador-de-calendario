@@ -1,6 +1,11 @@
 import webpush from 'web-push';
-import type { Queryable } from './events.service.js';
-import { env } from '../config/env.js';
+import type { Queryable } from './events.service';
+
+const env = {
+  vapidPublicKey: process.env.VAPID_PUBLIC_KEY || '',
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY || '',
+  vapidSubject: process.env.VAPID_SUBJECT || 'mailto:admin@lineup.app',
+};
 
 export interface PushSubscriptionKeys {
   p256dh: string;

@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 
 // Singleton pattern para evitar reconexões em dev
-let dbPool: Pool;
+let dbPool: Pool | null = null;
 
 export function getDbPool() {
   if (!dbPool) {
@@ -19,7 +19,7 @@ export function getDbPool() {
   return dbPool;
 }
 
-export async function query(text: string, params?: any[]) {
+export async function query(text: string, params?: unknown[]) {
   const pool = getDbPool();
   const start = Date.now();
   try {

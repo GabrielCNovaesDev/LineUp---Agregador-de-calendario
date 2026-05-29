@@ -1,15 +1,15 @@
-import { createClient } from 'redis';
+import { createClient, type RedisClientType } from 'redis';
 
 // Singleton pattern para evitar reconexões em dev
-let redisClient: any;
+let redisClient: RedisClientType | null = null;
 
-export function getRedisClient() {
+export function getRedisClient(): RedisClientType {
   if (!redisClient) {
     redisClient = createClient({
       url: process.env.REDIS_URL || 'redis://localhost:6379',
     });
 
-    redisClient.on('error', (err: any) => {
+    redisClient.on('error', (err: Error) => {
       console.error('Redis Client Error:', err);
     });
 
@@ -20,7 +20,7 @@ export function getRedisClient() {
   return redisClient;
 }
 
-export async function connectRedis() {
+export async function connectRedis(): Promise<RedisClientType> {
   const client = getRedisClient();
   if (!client.isOpen) {
     await client.connect();
@@ -28,7 +28,7 @@ export async function connectRedis() {
   return client;
 }
 
-export async function disconnectRedis() {
+export async function disconnectRedis(): Promise<void> {
   const client = getRedisClient();
   if (client.isOpen) {
     await client.disconnect();

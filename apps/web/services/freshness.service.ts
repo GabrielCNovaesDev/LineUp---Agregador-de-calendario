@@ -1,4 +1,4 @@
-import type { Queryable } from './events.service.js';
+import type { Queryable } from './events.service';
 
 export interface FreshnessInput {
   sportSlug: string;

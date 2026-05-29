@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "infra:up": "docker compose -f infra/docker-compose.yml up -d postgres redis",
-    "dev": "npm run infra:up && npm run migrate && concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev": "npm run infra:up && npm run migrate && npm run dev:web",
     "dev:api": "npm run dev --workspace=apps/api",
     "dev:web": "npm run dev --workspace=apps/web",
     "migrate": "node infra/migrate.js",
@@ -26,6 +26,12 @@
   },
   "dependencies": {
     "dotenv": "^17.4.2",
-    "pg": "^8.15.6"
+    "pg": "^8.15.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "overrides": {
+    "react": "$react",
+    "react-dom": "$react-dom"
   }
 }

@@ -10,16 +10,25 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@sports-calendar/adapters": "1.0.0",
+    "@sports-calendar/shared": "1.0.0",
     "@tanstack/react-query": "^5.100.14",
-    "next": "15.0.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "next": "^15.3.0",
+    "node-cron": "^4.2.1",
+    "pg": "^8.15.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "redis": "^4.7.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.11.14",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
