@@ -1,5 +1,3 @@
-export type TheSportsDBSportSlug = 'wec' | 'motogp';
-
 export interface TheSportsDBEvent {
   idEvent: string;
   strEvent: string | null;

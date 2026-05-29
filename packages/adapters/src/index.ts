@@ -5,6 +5,7 @@ export { TennisAdapter } from './apisports/tennis.adapter.js';
 export { TheSportsDBAdapter } from './thesportsdb/index.js';
 export { TheSportsDBBroadcastAdapter } from './thesportsdb/broadcast.adapter.js';
 export type { BroadcastResult } from './thesportsdb/broadcast.adapter.js';
+export { getLeagueId, getSupportedSlugs, LEAGUE_IDS } from './thesportsdb/leagues.js';
 export { TorcedoresScraper } from './scrapers/torcedores.scraper.js';
 export type { ScrapedBroadcast } from './scrapers/torcedores.scraper.js';
 export { UFCAdapter } from './apisports/ufc.adapter.js';

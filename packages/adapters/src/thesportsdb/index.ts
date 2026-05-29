@@ -4,7 +4,8 @@ import pThrottle from 'p-throttle';
 import type { EventStatus } from '@sports-calendar/shared';
 import { AdapterFetchError } from '../errors.js';
 import type { NormalizedEvent, SportAdapter } from '../types.js';
-import type { TheSportsDBEvent, TheSportsDBEventsResponse, TheSportsDBSportSlug } from './types.js';
+import type { TheSportsDBEvent, TheSportsDBEventsResponse } from './types.js';
+import { getLeagueId } from './leagues.js';
 
 dayjs.extend(utc);
 
@@ -12,11 +13,6 @@ const THESPORTSDB_BASE_URL = 'https://www.thesportsdb.com/api/v1/json';
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_ATTEMPTS = 4;
 const DEFAULT_BACKOFF_MS = [1_000, 2_000, 4_000] as const;
-
-const LEAGUE_IDS: Record<TheSportsDBSportSlug, number> = {
-  wec: 4370,
-  motogp: 4497
-};
 
 export interface TheSportsDBAdapterOptions {
   readonly baseUrl?: string;
@@ -30,7 +26,7 @@ export interface TheSportsDBAdapterOptions {
 
 export class TheSportsDBAdapter implements SportAdapter {
   readonly sourceId = 'thesportsdb';
-  readonly sportSlug: TheSportsDBSportSlug;
+  readonly sportSlug: string;
 
   private readonly apiKey: string;
   private readonly baseUrl: string;
@@ -41,13 +37,16 @@ export class TheSportsDBAdapter implements SportAdapter {
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly logger: Pick<Console, 'warn'>;
   private readonly throttledFetch: typeof fetch;
+  private readonly leagueId: string;
 
-  constructor(sportSlug: TheSportsDBSportSlug, apiKey: string, options: TheSportsDBAdapterOptions = {}) {
-    if (!LEAGUE_IDS[sportSlug]) {
-      throw new Error(`No league ID for sport: ${sportSlug}`);
+  constructor(sportSlug: string, apiKey: string, options: TheSportsDBAdapterOptions = {}) {
+    const leagueId = getLeagueId(sportSlug);
+    if (!leagueId) {
+      throw new Error(`No league ID for sport: ${sportSlug}. Check leagues.ts registry.`);
     }
 
     this.sportSlug = sportSlug;
+    this.leagueId = leagueId;
     this.apiKey = apiKey;
     this.baseUrl = options.baseUrl ?? THESPORTSDB_BASE_URL;
     this.fetchImpl = options.fetchImpl ?? fetch;
@@ -69,9 +68,8 @@ export class TheSportsDBAdapter implements SportAdapter {
   }
 
   private async fetchSeason(season: number): Promise<TheSportsDBEventsResponse> {
-    const leagueId = LEAGUE_IDS[this.sportSlug];
     return this.fetchJson<TheSportsDBEventsResponse>('/eventsseason.php', {
-      id: String(leagueId),
+      id: this.leagueId,
       s: String(season)
     });
   }
