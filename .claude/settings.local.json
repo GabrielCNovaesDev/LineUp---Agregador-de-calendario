@@ -40,7 +40,8 @@
       "Bash(curl -s \"http://localhost:3000/api/events?sports=f1&from=2026-01-01&limit=1&timezone=America/Sao_Paulo\")",
       "Bash(python -c \"import json,sys;d=json.load\\(sys.stdin\\);print\\(json.dumps\\(d['events'][0],indent=2\\)\\)\")",
       "Bash(curl -s \"http://localhost:3000/api/events?sports=f1&from=2026-01-01&limit=1\")",
-      "PowerShell(Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; \"stopped\")"
+      "PowerShell(Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; \"stopped\")",
+      "Bash(npx create-next-app@latest apps/web --typescript --tailwind --app --no-src-dir --import-alias \"@/*\" --no-eslint)"
     ]
   }
 }
